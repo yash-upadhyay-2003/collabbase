@@ -1,0 +1,48 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: collabbase_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: collabbase
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - collabbase_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d collabbase"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: collabbase_api
+    restart: unless-stopped
+    env_file:
+      - ./apps/api/.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/collabbase
+    ports:
+      - "4000:4000"
+    networks:
+      - collabbase_net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  
+
+volumes:
+  postgres_data:
+    name: collabbase_postgres_data
+
+networks:
+  collabbase_net:
+    name: collabbase_net
+    driver: bridge
