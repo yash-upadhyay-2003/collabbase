@@ -9,6 +9,4 @@ COPY . .
 
 RUN chmod +x entrypoint.sh
 
-EXPOSE 4000
-
 CMD ["sh", "entrypoint.sh"]
