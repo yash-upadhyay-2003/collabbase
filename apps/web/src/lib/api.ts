@@ -174,10 +174,15 @@ async function tryFetch<T>(path: string, init?: RequestInit): Promise<T | null> 
 export const api = {
   async login(email: string, _password: string) {
     await delay();
-    const remote = await tryFetch<BackendLoginResponse>("/auth/login", {
+    const res = await fetch(`${BASE_URL}/auth/login`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password: _password }),
     });
+    if (!res.ok) {
+      throw new Error("Invalid email or password");
+    }
+    const remote = await res.json() as BackendLoginResponse;
     if (remote?.access_token) {
       tokenStore.set(remote.access_token);
       const me = await tryFetch<BackendUser>("/auth/me");
@@ -187,20 +192,25 @@ export const api = {
         return user;
       }
     }
-    // Auth-only fallback — backend unreachable
-    if (_fallbackUser) return _fallbackUser;
-    const user: User = { id: uid("u"), name: email.split("@")[0], email, role: "owner" };
-    _fallbackUser = user;
-    tokenStore.set("offline_" + user.id);
-    return user;
+    throw new Error("Unable to retrieve user profile after login");
   },
 
   async register(name: string, email: string, password: string) {
     await delay();
-    const remote = await tryFetch<BackendUser>("/auth/register", {
+    const res = await fetch(`${BASE_URL}/auth/register`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ full_name: name, email, password }),
     });
+    if (!res.ok) {
+      try {
+        const err = await res.json();
+        throw new Error(err.detail || "Registration failed");
+      } catch {
+        throw new Error("Registration failed");
+      }
+    }
+    const remote = await res.json() as BackendUser;
     if (remote?.id) {
       const loginResp = await tryFetch<BackendLoginResponse>("/auth/login", {
         method: "POST",
@@ -213,11 +223,7 @@ export const api = {
       _fallbackUser = user;
       return user;
     }
-    // Auth-only fallback
-    const user: User = { id: uid("u"), name, email, role: "owner" };
-    _fallbackUser = user;
-    tokenStore.set("offline_" + user.id);
-    return user;
+    throw new Error("Registration failed to return a valid user");
   },
 
   async me() {
